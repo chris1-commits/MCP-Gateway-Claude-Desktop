@@ -1,0 +1,91 @@
+# Opulent Horizons MCP Gateway — Docker Compose
+# Runs both MCP servers + Postgres for local development and testing.
+#
+# Usage:
+#   docker compose up              # Start all services
+#   docker compose up lead-ingest  # Start only lead ingest
+#   docker compose up -d           # Detached mode
+#
+# First run: Postgres schema is auto-applied via init script.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Lead Ingest MCP Server (port 8001)
+  # ---------------------------------------------------------------------------
+  lead-ingest:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      MCP_SERVER: lead_ingest
+      MCP_PORT: "8001"
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: opulent
+      PGPASSWORD: ${PGPASSWORD:-opulent_dev}
+      PGDATABASE: opulent_mcp
+      WORKFLOW_WEBHOOK_URL: ${WORKFLOW_WEBHOOK_URL:-}
+      CLOUDTALK_WEBHOOK_SECRET: ${CLOUDTALK_WEBHOOK_SECRET:-}
+      NOTION_WEBHOOK_SECRET: ${NOTION_WEBHOOK_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/mcp')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Zoho CRM Sync MCP Server (port 8002)
+  # ---------------------------------------------------------------------------
+  zoho-sync:
+    build: .
+    ports:
+      - "8002:8002"
+    environment:
+      MCP_SERVER: zoho_crm_sync
+      MCP_PORT: "8002"
+      ZOHO_API_BASE: ${ZOHO_API_BASE:-https://www.zohoapis.com/crm/v2}
+      ZOHO_ACCESS_TOKEN: ${ZOHO_ACCESS_TOKEN:-}
+      PROPERTY_DB_HOST: postgres
+      PROPERTY_DB_PORT: "5432"
+      PROPERTY_DB_USER: opulent
+      PROPERTY_DB_PASSWORD: ${PGPASSWORD:-opulent_dev}
+      PROPERTY_DB_NAME: opulent_mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/mcp')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: opulent
+      POSTGRES_PASSWORD: ${PGPASSWORD:-opulent_dev}
+      POSTGRES_DB: opulent_mcp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./shared/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opulent -d opulent_mcp"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
