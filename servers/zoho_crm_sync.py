@@ -83,6 +83,8 @@ mcp = FastMCP(
 
 async def _zoho_get_lead(ctx: ZohoContext, lead_id: str) -> dict | None:
     """Fetch a lead from Zoho CRM by ID."""
+    if not ctx.zoho_access_token:
+        return None
     headers = {"Authorization": f"Zoho-oauthtoken {ctx.zoho_access_token}"}
     resp = await ctx.http_client.get(
         f"{ctx.zoho_api_base}/Leads/{lead_id}", headers=headers
@@ -95,6 +97,8 @@ async def _zoho_get_lead(ctx: ZohoContext, lead_id: str) -> dict | None:
 
 async def _zoho_upsert_lead(ctx: ZohoContext, lead_data: dict) -> dict | None:
     """Create or update a lead in Zoho CRM."""
+    if not ctx.zoho_access_token:
+        return None
     headers = {
         "Authorization": f"Zoho-oauthtoken {ctx.zoho_access_token}",
         "Content-Type": "application/json",
