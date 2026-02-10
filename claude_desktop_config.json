@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "opulent-lead-ingest": {
+      "command": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "servers.lead_ingest"],
+      "cwd": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway",
+      "env": {
+        "PGHOST": "",
+        "PGPORT": "5432",
+        "PGUSER": "opulent",
+        "PGPASSWORD": "",
+        "PGDATABASE": "property_db",
+        "WORKFLOW_WEBHOOK_URL": "",
+        "CLOUDTALK_WEBHOOK_SECRET": "",
+        "NOTION_WEBHOOK_SECRET": ""
+      }
+    },
+    "opulent-zoho-sync": {
+      "command": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "servers.zoho_crm_sync"],
+      "cwd": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway",
+      "env": {
+        "ZOHO_API_BASE": "https://www.zohoapis.com/crm/v2",
+        "ZOHO_ACCESS_TOKEN": "",
+        "PROPERTY_DB_HOST": "",
+        "PROPERTY_DB_PORT": "5432",
+        "PROPERTY_DB_USER": "opulent",
+        "PROPERTY_DB_PASSWORD": "",
+        "PROPERTY_DB_NAME": "property_db"
+      }
+    }
+  }
+}

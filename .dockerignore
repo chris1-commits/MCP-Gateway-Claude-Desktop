@@ -1,0 +1,28 @@
+# Credentials — never bake into an image
+.env
+.env.*
+!.env.example
+
+# Version control
+.git
+.gitignore
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.pytest_cache/
+.ruff_cache/
