@@ -391,9 +391,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.transport != "stdio":
+        from mcp.server.transport_security import TransportSecuritySettings
         # host/port are constructor-level settings — mutate before run()
         mcp.settings.host = args.host
         mcp.settings.port = args.port
         mcp.settings.json_response = True
+        # Disable DNS rebinding protection for production HTTP (behind reverse proxy/tunnel)
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        )
 
     mcp.run(transport=args.transport)
