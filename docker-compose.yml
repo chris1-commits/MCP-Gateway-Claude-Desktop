@@ -48,7 +48,11 @@ services:
     environment:
       MCP_SERVER: zoho_crm_sync
       MCP_PORT: "8002"
-      ZOHO_API_BASE: ${ZOHO_API_BASE:-https://www.zohoapis.com/crm/v2}
+      ZOHO_API_BASE: ${ZOHO_API_BASE:-https://www.zohoapis.com.au/crm/v2}
+      ZOHO_TOKEN_URL: ${ZOHO_TOKEN_URL:-https://accounts.zoho.com.au/oauth/v2/token}
+      ZOHO_CLIENT_ID: ${ZOHO_CLIENT_ID:-}
+      ZOHO_CLIENT_SECRET: ${ZOHO_CLIENT_SECRET:-}
+      ZOHO_REFRESH_TOKEN: ${ZOHO_REFRESH_TOKEN:-}
       ZOHO_ACCESS_TOKEN: ${ZOHO_ACCESS_TOKEN:-}
       PROPERTY_DB_HOST: postgres
       PROPERTY_DB_PORT: "5432"
