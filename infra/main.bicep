@@ -5,13 +5,12 @@
 //   - Lead Ingest MCP Server (port 8001)
 //   - Zoho CRM Sync MCP Server (port 8002)
 //   - Azure Container Registry
-//   - Key Vault for secrets
 //
 // Usage:
 //   az deployment group create \
-//     --resource-group rg-opulent-mcp \
+//     --resource-group mcp-gw-rg \
 //     --template-file infra/main.bicep \
-//     --parameters environmentName=prod
+//     --parameters environmentName=dev
 
 @description('Environment name (dev, staging, prod)')
 param environmentName string = 'dev'
@@ -22,13 +21,31 @@ param location string = resourceGroup().location
 @description('Container image tag')
 param imageTag string = 'latest'
 
+// Zoho OAuth2 credentials (passed as secure parameters)
+@secure()
+@description('Zoho OAuth2 Client ID')
+param zohoClientId string = ''
+
+@secure()
+@description('Zoho OAuth2 Client Secret')
+param zohoClientSecret string = ''
+
+@secure()
+@description('Zoho OAuth2 Refresh Token')
+param zohoRefreshToken string = ''
+
+@description('Zoho API Base URL')
+param zohoApiBase string = 'https://www.zohoapis.com.au/crm/v2'
+
+@description('Zoho Token URL')
+param zohoTokenUrl string = 'https://accounts.zoho.com.au/oauth/v2/token'
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
 
 var prefix = 'opulent-mcp-${environmentName}'
 var acrName = replace('acr${prefix}', '-', '')
-var kvName = 'kv-${prefix}'
 
 // ---------------------------------------------------------------------------
 // Container Registry
@@ -42,24 +59,6 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
   properties: {
     adminUserEnabled: true
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Key Vault
-// ---------------------------------------------------------------------------
-
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: kvName
-  location: location
-  properties: {
-    sku: {
-      family: 'A'
-      name: 'standard'
-    }
-    tenantId: subscription().tenantId
-    accessPolicies: []
-    enableRbacAuthorization: true
   }
 }
 
@@ -171,6 +170,18 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'acr-password'
           value: acr.listCredentials().passwords[0].value
         }
+        {
+          name: 'zoho-client-id'
+          value: zohoClientId
+        }
+        {
+          name: 'zoho-client-secret'
+          value: zohoClientSecret
+        }
+        {
+          name: 'zoho-refresh-token'
+          value: zohoRefreshToken
+        }
       ]
     }
     template: {
@@ -185,7 +196,11 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'MCP_SERVER', value: 'zoho_crm_sync' }
             { name: 'MCP_PORT', value: '8002' }
-            { name: 'ZOHO_API_BASE', value: 'https://www.zohoapis.com/crm/v2' }
+            { name: 'ZOHO_API_BASE', value: zohoApiBase }
+            { name: 'ZOHO_TOKEN_URL', value: zohoTokenUrl }
+            { name: 'ZOHO_CLIENT_ID', secretRef: 'zoho-client-id' }
+            { name: 'ZOHO_CLIENT_SECRET', secretRef: 'zoho-client-secret' }
+            { name: 'ZOHO_REFRESH_TOKEN', secretRef: 'zoho-refresh-token' }
             { name: 'ZOHO_ACCESS_TOKEN', value: '' }
             { name: 'PROPERTY_DB_HOST', value: '' }
             { name: 'PROPERTY_DB_PORT', value: '5432' }
@@ -220,4 +235,3 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
 output leadIngestUrl string = 'https://${leadIngest.properties.configuration.ingress.fqdn}'
 output zohoSyncUrl string = 'https://${zohoSync.properties.configuration.ingress.fqdn}'
 output acrLoginServer string = acr.properties.loginServer
-output keyVaultName string = keyVault.name
