@@ -27,6 +27,7 @@ services:
       WORKFLOW_WEBHOOK_URL: ${WORKFLOW_WEBHOOK_URL:-}
       CLOUDTALK_WEBHOOK_SECRET: ${CLOUDTALK_WEBHOOK_SECRET:-}
       NOTION_WEBHOOK_SECRET: ${NOTION_WEBHOOK_SECRET:-}
+      MCP_API_KEY: ${MCP_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +55,7 @@ services:
       ZOHO_CLIENT_SECRET: ${ZOHO_CLIENT_SECRET:-}
       ZOHO_REFRESH_TOKEN: ${ZOHO_REFRESH_TOKEN:-}
       ZOHO_ACCESS_TOKEN: ${ZOHO_ACCESS_TOKEN:-}
+      MCP_API_KEY: ${MCP_API_KEY:-}
       PROPERTY_DB_HOST: postgres
       PROPERTY_DB_PORT: "5432"
       PROPERTY_DB_USER: opulent

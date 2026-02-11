@@ -40,6 +40,10 @@ param zohoApiBase string = 'https://www.zohoapis.com.au/crm/v2'
 @description('Zoho Token URL')
 param zohoTokenUrl string = 'https://accounts.zoho.com.au/oauth/v2/token'
 
+@secure()
+@description('API key for authenticating MCP HTTP requests (Bearer token)')
+param mcpApiKey string = ''
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -102,6 +106,10 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'acr-password'
           value: acr.listCredentials().passwords[0].value
         }
+        {
+          name: 'mcp-api-key'
+          value: mcpApiKey
+        }
       ]
     }
     template: {
@@ -116,6 +124,7 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'MCP_SERVER', value: 'lead_ingest' }
             { name: 'MCP_PORT', value: '8001' }
+            { name: 'MCP_API_KEY', secretRef: 'mcp-api-key' }
             { name: 'PGHOST', value: '' }
             { name: 'PGDATABASE', value: '' }
             { name: 'WORKFLOW_WEBHOOK_URL', value: '' }
@@ -182,6 +191,10 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'zoho-refresh-token'
           value: zohoRefreshToken
         }
+        {
+          name: 'mcp-api-key'
+          value: mcpApiKey
+        }
       ]
     }
     template: {
@@ -196,6 +209,7 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'MCP_SERVER', value: 'zoho_crm_sync' }
             { name: 'MCP_PORT', value: '8002' }
+            { name: 'MCP_API_KEY', secretRef: 'mcp-api-key' }
             { name: 'ZOHO_API_BASE', value: zohoApiBase }
             { name: 'ZOHO_TOKEN_URL', value: zohoTokenUrl }
             { name: 'ZOHO_CLIENT_ID', secretRef: 'zoho-client-id' }

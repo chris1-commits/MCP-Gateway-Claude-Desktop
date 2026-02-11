@@ -390,15 +390,20 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="0.0.0.0", help="HTTP host (default: 0.0.0.0)")
     args = parser.parse_args()
 
-    if args.transport != "stdio":
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        import uvicorn
         from mcp.server.transport_security import TransportSecuritySettings
-        # host/port are constructor-level settings — mutate before run()
+        from shared.auth import apply_auth_middleware
+
         mcp.settings.host = args.host
         mcp.settings.port = args.port
         mcp.settings.json_response = True
-        # Disable DNS rebinding protection for production HTTP (behind reverse proxy/tunnel)
         mcp.settings.transport_security = TransportSecuritySettings(
             enable_dns_rebinding_protection=False,
         )
 
-    mcp.run(transport=args.transport)
+        app = mcp.streamable_http_app()
+        app = apply_auth_middleware(app)
+        uvicorn.run(app, host=args.host, port=args.port)
