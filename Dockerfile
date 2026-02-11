@@ -22,6 +22,6 @@ RUN pip install --no-cache-dir -e .
 ENV MCP_SERVER=lead_ingest
 ENV MCP_PORT=8001
 
-CMD python -m servers.${MCP_SERVER} --transport streamable-http --port ${MCP_PORT}
-
 EXPOSE 8001 8002
+
+CMD ["sh", "-c", "exec python -m servers.${MCP_SERVER} --transport streamable-http --port ${MCP_PORT}"]
