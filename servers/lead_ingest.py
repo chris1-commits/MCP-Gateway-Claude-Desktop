@@ -39,6 +39,7 @@ from shared.models import (
 from shared.repository import (
     Repository, PostgresRepository, InMemoryRepository, resolve_ohid,
 )
+from shared.middleware import wrap_tool_with_logging
 
 
 # ---------------------------------------------------------------------------
@@ -366,6 +367,12 @@ def pipeline_status() -> str:
         ),
     }, indent=2)
 
+
+# ---------------------------------------------------------------------------
+# Middleware — correlation ID + audit logging for all tools
+# ---------------------------------------------------------------------------
+
+wrap_tool_with_logging(mcp)
 
 # ---------------------------------------------------------------------------
 # Entrypoint

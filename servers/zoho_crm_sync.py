@@ -26,6 +26,8 @@ import httpx
 from mcp.server.fastmcp import FastMCP, Context
 
 from shared.models import ZohoCRMSyncRequest, ZohoCRMSyncResponse
+from shared.middleware import wrap_tool_with_logging
+from shared.zoho_auth import ZohoTokenManager
 
 
 # ---------------------------------------------------------------------------
@@ -36,19 +38,42 @@ from shared.models import ZohoCRMSyncRequest, ZohoCRMSyncResponse
 class ZohoContext:
     http_client: httpx.AsyncClient
     zoho_api_base: str
-    zoho_access_token: str
+    token_manager: ZohoTokenManager
     property_db_dsn: str
+
+    async def get_access_token(self) -> str:
+        """Get a valid Zoho access token (auto-refreshes if needed)."""
+        return await self.token_manager.get_access_token(self.http_client)
 
 
 @asynccontextmanager
 async def zoho_lifespan(server: FastMCP) -> AsyncIterator[ZohoContext]:
     """Initialise Zoho API client and Property DB connection."""
     http_client = httpx.AsyncClient(timeout=15.0)
+    token_manager = ZohoTokenManager.from_env()
+
+    if token_manager.has_oauth_credentials:
+        import logging
+        logging.getLogger("opulent.mcp").info(
+            "Zoho OAuth2 configured — tokens will auto-refresh"
+        )
+    elif token_manager.has_static_token:
+        import logging
+        logging.getLogger("opulent.mcp").warning(
+            "Zoho using static access token — will expire after ~1 hour. "
+            "Set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN for auto-refresh."
+        )
+    else:
+        import logging
+        logging.getLogger("opulent.mcp").warning(
+            "No Zoho credentials configured — CRM tools will return errors"
+        )
+
     try:
         yield ZohoContext(
             http_client=http_client,
             zoho_api_base=os.getenv("ZOHO_API_BASE", "https://www.zohoapis.com/crm/v2"),
-            zoho_access_token=os.getenv("ZOHO_ACCESS_TOKEN", ""),
+            token_manager=token_manager,
             property_db_dsn=(
                 f"postgresql://{os.getenv('PROPERTY_DB_USER', '')}:"
                 f"{os.getenv('PROPERTY_DB_PASSWORD', '')}@"
@@ -83,9 +108,10 @@ mcp = FastMCP(
 
 async def _zoho_get_lead(ctx: ZohoContext, lead_id: str) -> dict | None:
     """Fetch a lead from Zoho CRM by ID."""
-    if not ctx.zoho_access_token:
+    token = await ctx.get_access_token()
+    if not token:
         return None
-    headers = {"Authorization": f"Zoho-oauthtoken {ctx.zoho_access_token}"}
+    headers = {"Authorization": f"Zoho-oauthtoken {token}"}
     resp = await ctx.http_client.get(
         f"{ctx.zoho_api_base}/Leads/{lead_id}", headers=headers
     )
@@ -97,10 +123,11 @@ async def _zoho_get_lead(ctx: ZohoContext, lead_id: str) -> dict | None:
 
 async def _zoho_upsert_lead(ctx: ZohoContext, lead_data: dict) -> dict | None:
     """Create or update a lead in Zoho CRM."""
-    if not ctx.zoho_access_token:
+    token = await ctx.get_access_token()
+    if not token:
         return None
     headers = {
-        "Authorization": f"Zoho-oauthtoken {ctx.zoho_access_token}",
+        "Authorization": f"Zoho-oauthtoken {token}",
         "Content-Type": "application/json",
     }
     resp = await ctx.http_client.post(
@@ -295,15 +322,29 @@ async def upsert_zoho_lead(
 @mcp.resource("status://zoho-sync")
 def zoho_sync_status() -> str:
     """Zoho CRM sync configuration status."""
+    has_oauth = bool(
+        os.getenv("ZOHO_CLIENT_ID")
+        and os.getenv("ZOHO_CLIENT_SECRET")
+        and os.getenv("ZOHO_REFRESH_TOKEN")
+    )
     return json.dumps({
         "server": "Opulent Horizons Zoho CRM Sync",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "zoho_api_base": os.getenv("ZOHO_API_BASE", "https://www.zohoapis.com/crm/v2"),
-        "zoho_configured": bool(os.getenv("ZOHO_ACCESS_TOKEN")),
+        "zoho_auth_mode": "oauth2_refresh" if has_oauth else (
+            "static_token" if os.getenv("ZOHO_ACCESS_TOKEN") else "not_configured"
+        ),
+        "zoho_configured": has_oauth or bool(os.getenv("ZOHO_ACCESS_TOKEN")),
         "property_db_configured": bool(os.getenv("PROPERTY_DB_HOST")),
         "sync_directions": ["inbound", "outbound", "bidirectional"],
     }, indent=2)
 
+
+# ---------------------------------------------------------------------------
+# Middleware — correlation ID + audit logging for all tools
+# ---------------------------------------------------------------------------
+
+wrap_tool_with_logging(mcp)
 
 # ---------------------------------------------------------------------------
 # Entrypoint

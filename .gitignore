@@ -28,6 +28,9 @@ env/
 Thumbs.db
 desktop.ini
 
+# Claude Code session data
+.claude/
+
 # Test
 .pytest_cache/
 .ruff_cache/
