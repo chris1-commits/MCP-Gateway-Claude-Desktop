@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 from abc import ABC, abstractmethod
+from urllib.parse import quote_plus
 from datetime import datetime, timezone
 from typing import Optional, Any, Dict
 from uuid import uuid4
@@ -61,7 +62,7 @@ def _build_database_url() -> str:
     port = os.getenv("PGPORT", "5432")
     db = os.getenv("PGDATABASE", "")
     sslmode = os.getenv("PGSSLMODE", "")
-    url = f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+    url = f"postgresql://{quote_plus(user)}:{quote_plus(pw)}@{host}:{port}/{db}"
     if sslmode:
         url += f"?sslmode={sslmode}"
     return url
