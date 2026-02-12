@@ -184,6 +184,7 @@ def _mcp_stdio_call(server_module: str, tool_name: str, arguments: dict) -> dict
     time.sleep(1.5)  # Give server time to process tool call
 
     proc.stdin.close()
+    proc.stdin = None  # Prevent communicate() from flushing closed stdin
     stdout, stderr = proc.communicate(timeout=10)
 
     # Parse newline-delimited JSON responses from stdout

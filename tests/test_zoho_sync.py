@@ -78,6 +78,7 @@ def _mcp_stdio_call(server_module: str, tool_name: str, arguments: dict) -> dict
     time.sleep(1.5)
 
     proc.stdin.close()
+    proc.stdin = None  # Prevent communicate() from flushing closed stdin
     stdout, stderr = proc.communicate(timeout=10)
 
     responses = []
