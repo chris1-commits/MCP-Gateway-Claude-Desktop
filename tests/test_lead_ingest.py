@@ -30,7 +30,7 @@ def test_server_name():
 
 
 def test_tool_count():
-    assert len(mcp._tool_manager._tools) == 5
+    assert len(mcp._tool_manager._tools) == 7
 
 
 def test_expected_tools():
@@ -39,6 +39,8 @@ def test_expected_tools():
         "ingest_lead",
         "process_twilio_event",
         "process_notion_event",
+        "process_elevenlabs_event",
+        "process_calcom_event",
         "lookup_ohid",
         "verify_webhook_signature",
     }
@@ -96,6 +98,42 @@ class TestVerifyWebhookSignature:
         assert result["valid"] is True
         assert result["source"] == "notion"
         os.environ["NOTION_WEBHOOK_SECRET"] = ""
+
+    def test_valid_elevenlabs_signature(self):
+        secret = "elevenlabs-secret-789"
+        os.environ["ELEVENLABS_WEBHOOK_SECRET"] = secret
+        body = b'{"event_type":"call.ended"}'
+        digest = hmac_mod.new(
+            secret.encode(), msg=body, digestmod=hashlib.sha256
+        ).hexdigest()
+
+        from servers.lead_ingest import verify_webhook_signature
+        result = verify_webhook_signature(
+            body_hex=body.hex(),
+            signature=digest,
+            source="elevenlabs",
+        )
+        assert result["valid"] is True
+        assert result["source"] == "elevenlabs"
+        os.environ["ELEVENLABS_WEBHOOK_SECRET"] = ""
+
+    def test_valid_calcom_signature(self):
+        secret = "calcom-secret-012"
+        os.environ["CALCOM_WEBHOOK_SECRET"] = secret
+        body = b'{"triggerEvent":"BOOKING_CREATED"}'
+        digest = hmac_mod.new(
+            secret.encode(), msg=body, digestmod=hashlib.sha256
+        ).hexdigest()
+
+        from servers.lead_ingest import verify_webhook_signature
+        result = verify_webhook_signature(
+            body_hex=body.hex(),
+            signature=digest,
+            source="calcom",
+        )
+        assert result["valid"] is True
+        assert result["source"] == "calcom"
+        os.environ["CALCOM_WEBHOOK_SECRET"] = ""
 
     def test_unknown_source(self):
         from servers.lead_ingest import verify_webhook_signature
@@ -262,6 +300,65 @@ class TestIngestLeadIntegration:
         })
         assert result["accepted"] is True
         assert result["event_id"] == "notion-evt-001"
+
+    def test_elevenlabs_call_ended(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_elevenlabs_event", {
+            "event_type": "call.ended",
+            "agent_id": "agent-abc-123",
+            "conversation_id": "conv-xyz-789",
+            "call_duration_secs": 180,
+            "caller_id": "+61412345678",
+            "call_successful": True,
+            "transcript": "Hello, I am interested in a property viewing.",
+        })
+        assert result["accepted"] is True
+        assert result["event_type"] == "ElevenLabsCallCompleted"
+        assert result["conversation_id"] == "conv-xyz-789"
+
+    def test_elevenlabs_generic_event(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_elevenlabs_event", {
+            "event_type": "agent.call_received",
+            "agent_id": "agent-abc-123",
+            "conversation_id": "conv-generic-001",
+        })
+        assert result["accepted"] is True
+        assert result["event_type"] == "ElevenLabsEvent"
+
+    def test_calcom_booking_created(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_calcom_event", {
+            "trigger_event": "BOOKING_CREATED",
+            "booking_id": 12345,
+            "title": "Property Viewing — 3BR Penthouse",
+            "start_time": "2026-03-15T10:00:00Z",
+            "end_time": "2026-03-15T10:30:00Z",
+            "attendee_name": "Jane Smith",
+            "attendee_email": "jane@example.com",
+            "attendee_phone": "+61400111222",
+            "organizer_name": "Opulent Horizons",
+            "organizer_email": "bookings@opulenthorizons.com",
+            "location": "123 Harbour St, Sydney",
+            "status": "ACCEPTED",
+        })
+        assert result["accepted"] is True
+        assert result["event_type"] == "CalcomBookingCreated"
+        assert result["booking_id"] == 12345
+
+    def test_calcom_booking_cancelled(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_calcom_event", {
+            "trigger_event": "BOOKING_CANCELLED",
+            "booking_id": 12346,
+            "cancellation_reason": "Schedule conflict",
+        })
+        assert result["accepted"] is True
+        assert result["event_type"] == "CalcomBookingCancelled"
+
+    def test_calcom_meeting_ended(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_calcom_event", {
+            "trigger_event": "MEETING_ENDED",
+            "booking_id": 12347,
+        })
+        assert result["accepted"] is True
+        assert result["event_type"] == "CalcomMeetingEnded"
 
     def test_lookup_ohid_not_found(self):
         result = _mcp_stdio_call("servers.lead_ingest", "lookup_ohid", {

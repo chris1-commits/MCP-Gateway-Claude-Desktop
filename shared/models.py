@@ -37,11 +37,11 @@ class Consent(BaseModel):
 
 class LeadIngestRequest(BaseModel):
     source_system: str = Field(
-        ..., pattern=r"^(META|WEB|TWILIO|ZOHO_SOCIAL|ZOHO_CRM)$"
+        ..., pattern=r"^(META|WEB|TWILIO|ZOHO_SOCIAL|ZOHO_CRM|ELEVENLABS|CALCOM)$"
     )
     source_lead_id: str
     channel: str = Field(
-        ..., pattern=r"^(WEB_FORM|META_LEAD_AD|INBOUND_CALL|OUTBOUND_CALL|SOCIAL|CRM)$"
+        ..., pattern=r"^(WEB_FORM|META_LEAD_AD|INBOUND_CALL|OUTBOUND_CALL|SOCIAL|CRM|AI_VOICE_CALL|BOOKING)$"
     )
     person: Person
     lead_details: Optional[LeadDetails] = None
@@ -64,6 +64,53 @@ class TwilioWebhookPayload(BaseModel):
     raw: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
+
+# ---------------------------------------------------------------------------
+# Zoho CRM models (from zoho_crm_sync tool)
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# ElevenLabs Conversational AI models
+# ---------------------------------------------------------------------------
+
+class ElevenLabsWebhookPayload(BaseModel):
+    """ElevenLabs Conversational AI post-call webhook payload."""
+    event_type: str = Field(..., description="Event type (e.g. post_call_transcription, call.ended)")
+    agent_id: Optional[str] = Field(None, description="ElevenLabs agent ID")
+    conversation_id: Optional[str] = Field(None, description="ElevenLabs conversation ID")
+    call_duration_secs: Optional[int] = Field(None, description="Call duration in seconds")
+    transcript: Optional[str] = Field(None, description="Full call transcript text")
+    recording_url: Optional[str] = Field(None, description="URL to call recording")
+    caller_id: Optional[str] = Field(None, description="Caller phone number or identifier")
+    call_successful: Optional[bool] = Field(None, description="Whether the call was deemed successful")
+    analysis: Optional[Dict[str, Any]] = Field(None, description="Post-call analysis results")
+    raw: Dict[str, Any] = Field(default_factory=dict, description="Full raw webhook payload")
+
+
+# ---------------------------------------------------------------------------
+# Cal.com scheduling models
+# ---------------------------------------------------------------------------
+
+class CalcomWebhookPayload(BaseModel):
+    """Cal.com webhook payload for booking events."""
+    trigger_event: str = Field(..., description="Event trigger (BOOKING_CREATED, BOOKING_RESCHEDULED, BOOKING_CANCELLED, MEETING_ENDED)")
+    booking_id: Optional[int] = Field(None, description="Cal.com booking ID")
+    event_type_id: Optional[int] = Field(None, description="Cal.com event type ID")
+    title: Optional[str] = Field(None, description="Booking title / event name")
+    start_time: Optional[str] = Field(None, description="Booking start time (ISO 8601)")
+    end_time: Optional[str] = Field(None, description="Booking end time (ISO 8601)")
+    attendee_name: Optional[str] = Field(None, description="Attendee full name")
+    attendee_email: Optional[str] = Field(None, description="Attendee email address")
+    attendee_phone: Optional[str] = Field(None, description="Attendee phone number")
+    organizer_name: Optional[str] = Field(None, description="Organizer name")
+    organizer_email: Optional[str] = Field(None, description="Organizer email")
+    location: Optional[str] = Field(None, description="Meeting location or link")
+    status: Optional[str] = Field(None, description="Booking status (ACCEPTED, PENDING, CANCELLED)")
+    reschedule_reason: Optional[str] = Field(None, description="Reason for rescheduling")
+    cancellation_reason: Optional[str] = Field(None, description="Reason for cancellation")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Custom metadata from booking")
+    raw: Dict[str, Any] = Field(default_factory=dict, description="Full raw webhook payload")
+
 
 # ---------------------------------------------------------------------------
 # Zoho CRM models (from zoho_crm_sync tool)

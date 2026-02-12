@@ -62,6 +62,14 @@ param twilioAuthToken string = ''
 @description('Twilio Account SID')
 param twilioAccountSid string = ''
 
+@secure()
+@description('ElevenLabs webhook signing secret for signature verification')
+param elevenlabsWebhookSecret string = ''
+
+@secure()
+@description('Cal.com webhook secret for signature verification')
+param calcomWebhookSecret string = ''
+
 @description('n8n workflow webhook URL for lead event publishing')
 param workflowWebhookUrl string = ''
 
@@ -189,6 +197,14 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'twilio-auth-token'
           value: twilioAuthToken
         }
+        {
+          name: 'elevenlabs-webhook-secret'
+          value: elevenlabsWebhookSecret
+        }
+        {
+          name: 'calcom-webhook-secret'
+          value: calcomWebhookSecret
+        }
       ]
     }
     template: {
@@ -214,6 +230,8 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'TWILIO_AUTH_TOKEN', secretRef: 'twilio-auth-token' }
             { name: 'TWILIO_ACCOUNT_SID', value: twilioAccountSid }
             { name: 'NOTION_WEBHOOK_SECRET', value: '' }
+            { name: 'ELEVENLABS_WEBHOOK_SECRET', secretRef: 'elevenlabs-webhook-secret' }
+            { name: 'CALCOM_WEBHOOK_SECRET', secretRef: 'calcom-webhook-secret' }
           ]
         }
       ]

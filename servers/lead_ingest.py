@@ -83,7 +83,7 @@ mcp = FastMCP(
     name="Opulent Horizons Lead Ingest",
     instructions=(
         "Lead ingestion and OHID resolution server for Opulent Horizons property business. "
-        "Accepts leads from META, WEB, TWILIO, ZOHO_SOCIAL, and ZOHO_CRM sources. "
+        "Accepts leads from META, WEB, TWILIO, ZOHO_SOCIAL, ZOHO_CRM, ELEVENLABS, and CALCOM sources. "
         "Resolves or creates Opulent Horizons IDs (OHIDs) and persists to Property DB."
     ),
     lifespan=app_lifespan,
@@ -300,6 +300,191 @@ async def process_notion_event(
 
 
 # ---------------------------------------------------------------------------
+# Tools — ElevenLabs Conversational AI Webhook Processing
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def process_elevenlabs_event(
+    event_type: str,
+    agent_id: Optional[str] = None,
+    conversation_id: Optional[str] = None,
+    call_duration_secs: Optional[int] = None,
+    transcript: Optional[str] = None,
+    recording_url: Optional[str] = None,
+    caller_id: Optional[str] = None,
+    call_successful: Optional[bool] = None,
+    analysis: Optional[dict] = None,
+    raw: Optional[dict] = None,
+    ctx: Context = None,
+) -> dict:
+    """
+    Process an ElevenLabs Conversational AI webhook event.
+
+    Handles post-call actions such as transcription delivery, call analysis,
+    and call-ended events. Persists the event for downstream workflow
+    processing (lead matching, CRM update, follow-up scheduling).
+
+    Common event_type values: post_call_transcription, call.ended,
+    call.analysis_complete, agent.call_received.
+    """
+    app: AppContext = ctx.request_context.lifespan_context
+    event_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Map ElevenLabs event types to internal workflow event types
+    if event_type in ("call.ended", "post_call_transcription", "call.analysis_complete"):
+        internal_event_type = "ElevenLabsCallCompleted"
+    else:
+        internal_event_type = "ElevenLabsEvent"
+
+    event = {
+        "event_type": internal_event_type,
+        "event_subtype": event_type,
+        "event_id": event_id,
+        "occurred_at": now,
+        "elevenlabs": {
+            "agent_id": agent_id,
+            "conversation_id": conversation_id,
+            "call_duration_secs": call_duration_secs,
+            "transcript": transcript,
+            "recording_url": recording_url,
+            "caller_id": caller_id,
+            "call_successful": call_successful,
+            "analysis": analysis,
+        },
+        "ohid": None,
+    }
+
+    await app.repo.insert_workflow_event(
+        event_id=event_id,
+        ohid=None,
+        event_type=internal_event_type,
+        payload=event,
+        source_system="ELEVENLABS",
+    )
+
+    await _publish_event(app, internal_event_type, event)
+    await ctx.info(
+        f"ElevenLabs event processed: {internal_event_type} "
+        f"conversation_id={conversation_id}"
+    )
+
+    return {
+        "event_id": event_id,
+        "event_type": internal_event_type,
+        "conversation_id": conversation_id,
+        "accepted": True,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tools — Cal.com Booking Webhook Processing
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def process_calcom_event(
+    trigger_event: str,
+    booking_id: Optional[int] = None,
+    event_type_id: Optional[int] = None,
+    title: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    attendee_name: Optional[str] = None,
+    attendee_email: Optional[str] = None,
+    attendee_phone: Optional[str] = None,
+    organizer_name: Optional[str] = None,
+    organizer_email: Optional[str] = None,
+    location: Optional[str] = None,
+    status: Optional[str] = None,
+    reschedule_reason: Optional[str] = None,
+    cancellation_reason: Optional[str] = None,
+    metadata: Optional[dict] = None,
+    raw: Optional[dict] = None,
+    ctx: Context = None,
+) -> dict:
+    """
+    Process a Cal.com booking webhook event.
+
+    Handles booking lifecycle events: creation, rescheduling, cancellation,
+    and meeting completion. Persists the event and publishes for downstream
+    workflow processing (lead follow-up, CRM update, property viewing scheduling).
+
+    trigger_event values: BOOKING_CREATED, BOOKING_RESCHEDULED,
+    BOOKING_CANCELLED, BOOKING_CONFIRMED, MEETING_ENDED, MEETING_STARTED.
+    """
+    app: AppContext = ctx.request_context.lifespan_context
+    event_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Map Cal.com triggers to internal event types
+    event_type_map = {
+        "BOOKING_CREATED": "CalcomBookingCreated",
+        "BOOKING_RESCHEDULED": "CalcomBookingRescheduled",
+        "BOOKING_CANCELLED": "CalcomBookingCancelled",
+        "BOOKING_CONFIRMED": "CalcomBookingConfirmed",
+        "MEETING_ENDED": "CalcomMeetingEnded",
+        "MEETING_STARTED": "CalcomMeetingStarted",
+    }
+    internal_event_type = event_type_map.get(trigger_event, "CalcomEvent")
+
+    # Attempt OHID resolution if attendee contact info is available
+    ohid = None
+    if attendee_email or attendee_phone:
+        ohid = await app.repo.find_ohid_by_contact(attendee_email, attendee_phone)
+
+    event = {
+        "event_type": internal_event_type,
+        "event_subtype": trigger_event,
+        "event_id": event_id,
+        "occurred_at": now,
+        "ohid": ohid,
+        "booking": {
+            "booking_id": booking_id,
+            "event_type_id": event_type_id,
+            "title": title,
+            "start_time": start_time,
+            "end_time": end_time,
+            "attendee": {
+                "name": attendee_name,
+                "email": attendee_email,
+                "phone": attendee_phone,
+            },
+            "organizer": {
+                "name": organizer_name,
+                "email": organizer_email,
+            },
+            "location": location,
+            "status": status,
+            "reschedule_reason": reschedule_reason,
+            "cancellation_reason": cancellation_reason,
+            "metadata": metadata,
+        },
+    }
+
+    await app.repo.insert_workflow_event(
+        event_id=event_id,
+        ohid=ohid,
+        event_type=internal_event_type,
+        payload=event,
+        source_system="CALCOM",
+    )
+
+    await _publish_event(app, internal_event_type, event)
+    await ctx.info(
+        f"Cal.com event processed: {internal_event_type} "
+        f"booking_id={booking_id} ohid={ohid}"
+    )
+
+    return {
+        "event_id": event_id,
+        "event_type": internal_event_type,
+        "booking_id": booking_id,
+        "ohid": ohid,
+        "accepted": True,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Tools — OHID Lookup
 # ---------------------------------------------------------------------------
 
@@ -335,11 +520,13 @@ def verify_webhook_signature(
     source: str = "twilio",
 ) -> dict:
     """
-    Verify a webhook signature for Twilio or Notion payloads.
+    Verify a webhook signature for Twilio, Notion, ElevenLabs, or Cal.com payloads.
     Body should be provided as hex-encoded string.
 
     Twilio uses HMAC-SHA256 with the auth token.
     Notion uses HMAC-SHA256 with the webhook secret.
+    ElevenLabs uses HMAC-SHA256 with the webhook signing secret.
+    Cal.com uses HMAC-SHA256 with the webhook secret.
     """
     body = bytes.fromhex(body_hex)
 
@@ -352,6 +539,14 @@ def verify_webhook_signature(
         sig = signature.split("=", 1)[1] if signature.startswith("sha256=") else signature
         digest = hmac.new(secret.encode(), msg=body, digestmod=hashlib.sha256).hexdigest()
         valid = hmac.compare_digest(digest, sig)
+    elif source == "elevenlabs":
+        secret = os.getenv("ELEVENLABS_WEBHOOK_SECRET", "")
+        digest = hmac.new(secret.encode(), msg=body, digestmod=hashlib.sha256).hexdigest()
+        valid = hmac.compare_digest(digest, signature)
+    elif source == "calcom":
+        secret = os.getenv("CALCOM_WEBHOOK_SECRET", "")
+        digest = hmac.new(secret.encode(), msg=body, digestmod=hashlib.sha256).hexdigest()
+        valid = hmac.compare_digest(digest, signature)
     else:
         return {"valid": False, "error": f"Unknown source: {source}"}
 
@@ -368,8 +563,8 @@ def pipeline_status() -> str:
     return json.dumps({
         "server": "Opulent Horizons Lead Ingest",
         "version": "1.0.0",
-        "sources": ["META", "WEB", "TWILIO", "ZOHO_SOCIAL", "ZOHO_CRM"],
-        "channels": ["WEB_FORM", "META_LEAD_AD", "INBOUND_CALL", "OUTBOUND_CALL", "SOCIAL", "CRM"],
+        "sources": ["META", "WEB", "TWILIO", "ZOHO_SOCIAL", "ZOHO_CRM", "ELEVENLABS", "CALCOM"],
+        "channels": ["WEB_FORM", "META_LEAD_AD", "INBOUND_CALL", "OUTBOUND_CALL", "SOCIAL", "CRM", "AI_VOICE_CALL", "BOOKING"],
         "database": "connected" if os.getenv("PGHOST") else "in-memory",
         "workflow_webhook": bool(
             os.getenv("WORKFLOW_WEBHOOK_URL") or os.getenv("N8N_WEBHOOK_URL")
