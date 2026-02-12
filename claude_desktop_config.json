@@ -1,21 +1,42 @@
 {
   "mcpServers": {
     "opulent-lead-ingest": {
-      "url": "https://opulent-mcp-dev-lead-ingest.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp",
-      "headers": {
-        "Authorization": "Bearer <MCP_API_KEY>"
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://opulent-mcp-dev-lead-ingest.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp",
+        "--header",
+        "Authorization:${AUTH_LEAD_INGEST}"
+      ],
+      "env": {
+        "AUTH_LEAD_INGEST": "Bearer <MCP_API_KEY>"
       }
     },
     "opulent-zoho-sync": {
-      "url": "https://opulent-mcp-dev-zoho-sync.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp",
-      "headers": {
-        "Authorization": "Bearer <MCP_API_KEY>"
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://opulent-mcp-dev-zoho-sync.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp",
+        "--header",
+        "Authorization:${AUTH_ZOHO_SYNC}"
+      ],
+      "env": {
+        "AUTH_ZOHO_SYNC": "Bearer <MCP_API_KEY>"
       }
     },
     "n8n-workflows": {
-      "url": "https://chris-ml-s.app.n8n.cloud/mcp-server/http",
-      "headers": {
-        "Authorization": "Bearer <N8N_MCP_ACCESS_TOKEN>"
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://chris-ml-s.app.n8n.cloud/mcp-server/http",
+        "--header",
+        "Authorization:${AUTH_N8N}"
+      ],
+      "env": {
+        "AUTH_N8N": "Bearer <N8N_MCP_ACCESS_TOKEN>"
       }
     },
     "opulent-lead-ingest-local": {
