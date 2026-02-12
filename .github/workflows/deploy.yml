@@ -76,7 +76,8 @@ jobs:
               mcpApiKey="${{ secrets.MCP_API_KEY }}" \
               pgAdminPassword="${{ secrets.PG_ADMIN_PASSWORD }}" \
               twilioAuthToken="${{ secrets.TWILIO_AUTH_TOKEN }}" \
-              twilioAccountSid="${{ secrets.TWILIO_ACCOUNT_SID }}"
+              twilioAccountSid="${{ secrets.TWILIO_ACCOUNT_SID }}" \
+              workflowWebhookUrl="https://chris-ml-s.app.n8n.cloud/webhook/mcp-lead-events"
 
       - name: Get deployment outputs
         id: outputs

@@ -62,6 +62,9 @@ param twilioAuthToken string = ''
 @description('Twilio Account SID')
 param twilioAccountSid string = ''
 
+@description('n8n workflow webhook URL for lead event publishing')
+param workflowWebhookUrl string = ''
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -207,7 +210,7 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'PGPASSWORD', secretRef: 'pg-password' }
             { name: 'PGDATABASE', value: pgDatabaseName }
             { name: 'PGSSLMODE', value: 'require' }
-            { name: 'WORKFLOW_WEBHOOK_URL', value: '' }
+            { name: 'WORKFLOW_WEBHOOK_URL', value: workflowWebhookUrl }
             { name: 'TWILIO_AUTH_TOKEN', secretRef: 'twilio-auth-token' }
             { name: 'TWILIO_ACCOUNT_SID', value: twilioAccountSid }
             { name: 'NOTION_WEBHOOK_SECRET', value: '' }
