@@ -5,6 +5,7 @@
 //   - Lead Ingest MCP Server (port 8001)
 //   - Zoho CRM Sync MCP Server (port 8002)
 //   - Azure Container Registry
+//   - Azure Database for PostgreSQL Flexible Server
 //
 // Usage:
 //   az deployment group create \
@@ -44,12 +45,23 @@ param zohoTokenUrl string = 'https://accounts.zoho.com.au/oauth/v2/token'
 @description('API key for authenticating MCP HTTP requests (Bearer token)')
 param mcpApiKey string = ''
 
+@secure()
+@description('PostgreSQL administrator password')
+param pgAdminPassword string
+
+@description('PostgreSQL administrator username')
+param pgAdminUser string = 'opulent'
+
+@description('PostgreSQL database name')
+param pgDatabaseName string = 'opulent_mcp'
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
 
 var prefix = 'opulent-mcp-${environmentName}'
 var acrName = replace('acr${prefix}', '-', '')
+var pgServerName = '${prefix}-pg'
 
 // ---------------------------------------------------------------------------
 // Container Registry
@@ -63,6 +75,54 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
   properties: {
     adminUserEnabled: true
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PostgreSQL Flexible Server
+// ---------------------------------------------------------------------------
+
+resource pgServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+  name: pgServerName
+  location: location
+  sku: {
+    name: 'Standard_B1ms'
+    tier: 'Burstable'
+  }
+  properties: {
+    version: '16'
+    administratorLogin: pgAdminUser
+    administratorLoginPassword: pgAdminPassword
+    storage: {
+      storageSizeGB: 32
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    highAvailability: {
+      mode: 'Disabled'
+    }
+  }
+}
+
+// Allow Azure services (Container Apps) to reach the database
+resource pgFirewallAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+  parent: pgServer
+  name: 'AllowAzureServices'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+// Create the application database
+resource pgDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
+  parent: pgServer
+  name: pgDatabaseName
+  properties: {
+    charset: 'UTF8'
+    collation: 'en_US.utf8'
   }
 }
 
@@ -85,6 +145,7 @@ resource containerEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-lead-ingest'
   location: location
+  dependsOn: [pgDatabase]
   properties: {
     managedEnvironmentId: containerEnv.id
     configuration: {
@@ -110,6 +171,10 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'mcp-api-key'
           value: mcpApiKey
         }
+        {
+          name: 'pg-password'
+          value: pgAdminPassword
+        }
       ]
     }
     template: {
@@ -125,8 +190,12 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'MCP_SERVER', value: 'lead_ingest' }
             { name: 'MCP_PORT', value: '8001' }
             { name: 'MCP_API_KEY', secretRef: 'mcp-api-key' }
-            { name: 'PGHOST', value: '' }
-            { name: 'PGDATABASE', value: '' }
+            { name: 'PGHOST', value: '${pgServer.name}.postgres.database.azure.com' }
+            { name: 'PGPORT', value: '5432' }
+            { name: 'PGUSER', value: pgAdminUser }
+            { name: 'PGPASSWORD', secretRef: 'pg-password' }
+            { name: 'PGDATABASE', value: pgDatabaseName }
+            { name: 'PGSSLMODE', value: 'require' }
             { name: 'WORKFLOW_WEBHOOK_URL', value: '' }
             { name: 'CLOUDTALK_WEBHOOK_SECRET', value: '' }
             { name: 'NOTION_WEBHOOK_SECRET', value: '' }
@@ -158,6 +227,7 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
 resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-zoho-sync'
   location: location
+  dependsOn: [pgDatabase]
   properties: {
     managedEnvironmentId: containerEnv.id
     configuration: {
@@ -195,6 +265,10 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'mcp-api-key'
           value: mcpApiKey
         }
+        {
+          name: 'pg-password'
+          value: pgAdminPassword
+        }
       ]
     }
     template: {
@@ -216,11 +290,11 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ZOHO_CLIENT_SECRET', secretRef: 'zoho-client-secret' }
             { name: 'ZOHO_REFRESH_TOKEN', secretRef: 'zoho-refresh-token' }
             { name: 'ZOHO_ACCESS_TOKEN', value: '' }
-            { name: 'PROPERTY_DB_HOST', value: '' }
+            { name: 'PROPERTY_DB_HOST', value: '${pgServer.name}.postgres.database.azure.com' }
             { name: 'PROPERTY_DB_PORT', value: '5432' }
-            { name: 'PROPERTY_DB_USER', value: '' }
-            { name: 'PROPERTY_DB_PASSWORD', value: '' }
-            { name: 'PROPERTY_DB_NAME', value: 'property_db' }
+            { name: 'PROPERTY_DB_USER', value: pgAdminUser }
+            { name: 'PROPERTY_DB_PASSWORD', secretRef: 'pg-password' }
+            { name: 'PROPERTY_DB_NAME', value: pgDatabaseName }
           ]
         }
       ]
@@ -249,3 +323,4 @@ resource zohoSync 'Microsoft.App/containerApps@2024-03-01' = {
 output leadIngestUrl string = 'https://${leadIngest.properties.configuration.ingress.fqdn}'
 output zohoSyncUrl string = 'https://${zohoSync.properties.configuration.ingress.fqdn}'
 output acrLoginServer string = acr.properties.loginServer
+output pgFqdn string = '${pgServer.name}.postgres.database.azure.com'

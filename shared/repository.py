@@ -60,7 +60,11 @@ def _build_database_url() -> str:
     host = os.getenv("PGHOST", "localhost")
     port = os.getenv("PGPORT", "5432")
     db = os.getenv("PGDATABASE", "")
-    return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+    sslmode = os.getenv("PGSSLMODE", "")
+    url = f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+    if sslmode:
+        url += f"?sslmode={sslmode}"
+    return url
 
 class PostgresRepository(Repository):
     """Async Postgres repository using asyncpg directly (no SQLAlchemy overhead)."""
@@ -90,8 +94,8 @@ class PostgresRepository(Repository):
             lead.source_system,
             lead.source_lead_id,
             lead.channel,
-            json.dumps(lead.model_dump(by_alias=True)),
-            json.dumps(lead.consent.model_dump()),
+            lead.model_dump_json(by_alias=True),
+            lead.consent.model_dump_json(),
             datetime.now(timezone.utc),
         )
     async def find_ohid_by_contact(
@@ -126,7 +130,7 @@ class PostgresRepository(Repository):
             event_id,
             ohid,
             event_type,
-            json.dumps(payload) if not isinstance(payload, str) else payload,
+            json.dumps(payload, default=str) if not isinstance(payload, str) else payload,
             datetime.now(timezone.utc),
             source_system,
         )

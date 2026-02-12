@@ -173,7 +173,7 @@ async def ingest_lead(
         "event_id": ingest_id,
         "occurred_at": datetime.now(timezone.utc).isoformat(),
         "ohid": ohid,
-        "lead_ingest": lead.model_dump(),
+        "lead_ingest": lead.model_dump(mode="json"),
     }
     await app.repo.insert_workflow_event(
         event_id=ingest_id,
