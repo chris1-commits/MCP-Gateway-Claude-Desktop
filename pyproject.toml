@@ -19,6 +19,9 @@ dependencies = [
 
     # === Retry logic ===
     "tenacity>=9.0",
+
+    # === Web framework (ElevenLabs webhook endpoints) ===
+    "fastapi>=0.115",
 ]
 
 [project.optional-dependencies]
@@ -35,7 +38,7 @@ build-backend = "hatchling.build"
 # Explicit package discovery so 'pip install -e .' works
 # and absolute imports resolve without sys.path hacks.
 [tool.hatch.build.targets.wheel]
-packages = ["shared", "servers"]
+packages = ["shared", "servers", "src"]
 
 [tool.ruff]
 line-length = 100

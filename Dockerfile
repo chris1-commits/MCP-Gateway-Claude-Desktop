@@ -14,6 +14,7 @@ COPY pyproject.toml .
 # Copy source packages
 COPY shared/ shared/
 COPY servers/ servers/
+COPY src/ src/
 
 # Install as editable package — resolves absolute imports (shared.models, etc.)
 RUN pip install --no-cache-dir -e .

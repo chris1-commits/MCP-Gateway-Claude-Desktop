@@ -65,6 +65,10 @@ param twilioAccountSid string = ''
 @description('n8n workflow webhook URL for lead event publishing')
 param workflowWebhookUrl string = ''
 
+@secure()
+@description('ElevenLabs webhook HMAC-SHA256 secret for signature verification')
+param elevenlabsWebhookSecret string = ''
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -189,6 +193,10 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'twilio-auth-token'
           value: twilioAuthToken
         }
+        {
+          name: 'elevenlabs-webhook-secret'
+          value: elevenlabsWebhookSecret
+        }
       ]
     }
     template: {
@@ -214,6 +222,7 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'TWILIO_AUTH_TOKEN', secretRef: 'twilio-auth-token' }
             { name: 'TWILIO_ACCOUNT_SID', value: twilioAccountSid }
             { name: 'NOTION_WEBHOOK_SECRET', value: '' }
+            { name: 'ELEVENLABS_WEBHOOK_SECRET', secretRef: 'elevenlabs-webhook-secret' }
           ]
         }
       ]

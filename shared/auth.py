@@ -35,7 +35,11 @@ class APIKeyMiddleware:
         request = Request(scope)
 
         # Allow health-check / readiness probes without auth
-        if request.url.path in ("/health", "/healthz", "/ready"):
+        # Allow /webhooks/ paths (ElevenLabs uses its own HMAC-SHA256 auth)
+        if (
+            request.url.path in ("/health", "/healthz", "/ready")
+            or request.url.path.startswith("/webhooks/")
+        ):
             await self.app(scope, receive, send)
             return
 

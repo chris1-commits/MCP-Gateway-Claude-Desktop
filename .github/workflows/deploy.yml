@@ -77,7 +77,8 @@ jobs:
               pgAdminPassword="${{ secrets.PG_ADMIN_PASSWORD }}" \
               twilioAuthToken="${{ secrets.TWILIO_AUTH_TOKEN }}" \
               twilioAccountSid="${{ secrets.TWILIO_ACCOUNT_SID }}" \
-              workflowWebhookUrl="https://chris-ml-s.app.n8n.cloud/webhook/mcp-lead-events"
+              workflowWebhookUrl="https://chris-ml-s.app.n8n.cloud/webhook/mcp-lead-events" \
+              elevenlabsWebhookSecret="${{ secrets.ELEVENLABS_WEBHOOK_SECRET }}"
 
       - name: Get deployment outputs
         id: outputs

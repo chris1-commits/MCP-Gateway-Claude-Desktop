@@ -389,6 +389,8 @@ wrap_tool_with_logging(mcp)
 
 if __name__ == "__main__":
     import argparse
+    import logging
+    import sys
 
     parser = argparse.ArgumentParser(description="Opulent Horizons Lead Ingest MCP Server")
     parser.add_argument(
@@ -403,8 +405,19 @@ if __name__ == "__main__":
         mcp.run(transport="stdio")
     else:
         import uvicorn
+        from fastapi import FastAPI
         from mcp.server.transport_security import TransportSecuritySettings
         from shared.auth import apply_auth_middleware
+
+        # Add src/ to path for ElevenLabs webhook imports
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
+        )
+        from elevenlabs_webhooks import (
+            router as elevenlabs_router,
+            set_lead_lookup,
+            set_post_call_handler,
+        )
 
         mcp.settings.host = args.host
         mcp.settings.port = args.port
@@ -413,6 +426,85 @@ if __name__ == "__main__":
             enable_dns_rebinding_protection=False,
         )
 
-        app = mcp.streamable_http_app()
-        app = apply_auth_middleware(app)
+        # --- Create FastAPI gateway wrapping MCP + webhook endpoints ---
+        gateway = FastAPI(title="Opulent Horizons MCP Gateway")
+
+        @gateway.get("/health")
+        async def health():
+            return {"status": "ok"}
+
+        gateway.include_router(elevenlabs_router)
+
+        # --- Wire lead lookup (phone → lead dict) using repository ---
+        _el_logger = logging.getLogger("mcp_gateway.elevenlabs")
+
+        async def _lookup_lead_by_phone(phone: str):
+            """Query lead_context for a lead by phone number."""
+            use_postgres = os.getenv("PGHOST") and os.getenv("PGDATABASE")
+            if not use_postgres:
+                return None
+            try:
+                from shared.repository import PostgresRepository
+                repo = PostgresRepository()
+                await repo.connect()
+                try:
+                    row = await repo._pool.fetchrow(
+                        """
+                        SELECT ohid, payload FROM lead_context
+                        WHERE payload->'person'->>'phone' = $1
+                        ORDER BY created_at DESC LIMIT 1
+                        """,
+                        phone,
+                    )
+                    if not row:
+                        return None
+                    import json as _json
+                    payload = _json.loads(row["payload"]) if isinstance(row["payload"], str) else row["payload"]
+                    person = payload.get("person", {})
+                    return {
+                        "First_Name": person.get("first_name", ""),
+                        "Last_Name": person.get("last_name", ""),
+                        "Lead_Status": "existing",
+                        "DistributionID": row["ohid"],
+                        "Record_Id": row["ohid"],
+                    }
+                finally:
+                    await repo.disconnect()
+            except Exception as exc:
+                _el_logger.error("Lead lookup DB error", extra={"error": str(exc)})
+                return None
+
+        set_lead_lookup(_lookup_lead_by_phone)
+
+        # --- Wire post-call handler (persist to workflow_event table) ---
+        async def _handle_post_call(data: dict):
+            """Persist ElevenLabs post-call data as a workflow event."""
+            use_postgres = os.getenv("PGHOST") and os.getenv("PGDATABASE")
+            if not use_postgres:
+                _el_logger.info("Post-call logged (no DB)", extra={"data_keys": list(data.keys())})
+                return
+            try:
+                from shared.repository import PostgresRepository
+                repo = PostgresRepository()
+                await repo.connect()
+                try:
+                    await repo.insert_workflow_event(
+                        event_id=str(uuid4()),
+                        ohid=None,
+                        event_type="ElevenLabsPostCall",
+                        payload=data,
+                        source_system="ELEVENLABS",
+                    )
+                finally:
+                    await repo.disconnect()
+            except Exception as exc:
+                _el_logger.error("Post-call persist failed", extra={"error": str(exc)})
+
+        set_post_call_handler(_handle_post_call)
+
+        # Mount MCP protocol handler (catch-all for /mcp path)
+        mcp_http = mcp.streamable_http_app()
+        gateway.mount("/", mcp_http)
+
+        app = apply_auth_middleware(gateway)
         uvicorn.run(app, host=args.host, port=args.port)
