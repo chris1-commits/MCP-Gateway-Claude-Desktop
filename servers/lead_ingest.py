@@ -20,9 +20,11 @@ Run:
 # all annotations into strings, breaking Optional[str] -> schema resolution.
 
 import os
+import sys
 import json
 import hmac
 import hashlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -67,12 +69,97 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
     http_client = httpx.AsyncClient(timeout=10.0)
 
+    # Wire ElevenLabs webhook handlers to the shared repository
+    _wire_elevenlabs_handlers(repo, http_client)
+
     try:
         yield AppContext(repo=repo, http_client=http_client)
     finally:
         await http_client.aclose()
         if use_postgres:
             await repo.disconnect()
+
+
+def _wire_elevenlabs_handlers(repo: Repository, http_client: httpx.AsyncClient) -> None:
+    """Register lead lookup and post-call persistence for ElevenLabs webhooks."""
+    _src = os.path.join(os.path.dirname(__file__), "..", "src")
+    if _src not in sys.path:
+        sys.path.insert(0, _src)
+    try:
+        from elevenlabs_webhooks import set_lead_lookup, set_post_call_handler
+    except ImportError:
+        return
+
+    logger = logging.getLogger("mcp_gateway.elevenlabs_wiring")
+
+    async def lookup_lead_by_phone(phone: str) -> dict | None:
+        """Query lead_context by phone, return Zoho-style field dict."""
+        if isinstance(repo, PostgresRepository):
+            row = await repo._pool.fetchrow(
+                """
+                SELECT ohid, payload, created_at FROM lead_context
+                WHERE payload->'person'->>'phone' = $1
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                phone,
+            )
+            if not row:
+                return None
+            payload = json.loads(row["payload"]) if isinstance(row["payload"], str) else row["payload"]
+            person = payload.get("person", {})
+            details = payload.get("lead_details") or {}
+            return {
+                "First_Name": person.get("first_name", ""),
+                "Last_Name": person.get("last_name", ""),
+                "Lead_Status": "existing",
+                "Lead_Type": details.get("property_type", ""),
+                "Lead_Source": payload.get("source_system", ""),
+                "DistributionID": str(row["ohid"]),
+                "Budget_Range": details.get("budget_range", ""),
+                "Preferred_Location": details.get("location", ""),
+                "call_timestamp": row["created_at"].isoformat() if row["created_at"] else "",
+                "Description": details.get("free_text", ""),
+            }
+        elif isinstance(repo, InMemoryRepository):
+            for record in repo.leads.values():
+                p = record["lead"].person
+                if p.phone == phone:
+                    lead = record["lead"]
+                    details = lead.lead_details
+                    return {
+                        "First_Name": p.first_name,
+                        "Last_Name": p.last_name,
+                        "Lead_Status": "existing",
+                        "Lead_Type": details.property_type if details else "",
+                        "Lead_Source": lead.source_system,
+                        "DistributionID": record["ohid"],
+                        "Budget_Range": details.budget_range if details else "",
+                        "Preferred_Location": details.location if details else "",
+                        "Description": details.free_text if details else "",
+                    }
+        return None
+
+    async def handle_post_call(data: dict) -> None:
+        """Persist ElevenLabs post-call data as a workflow event."""
+        event_id = str(uuid4())
+        await repo.insert_workflow_event(
+            event_id=event_id,
+            ohid=None,
+            event_type="ElevenLabsPostCall",
+            payload=data,
+            source_system="ELEVENLABS",
+        )
+        # Publish to workflow engine
+        url = os.getenv("WORKFLOW_WEBHOOK_URL") or os.getenv("N8N_WEBHOOK_URL")
+        if url:
+            try:
+                await http_client.post(url, json={"event_type": "ElevenLabsPostCall", **data})
+            except httpx.HTTPError:
+                pass
+
+    set_lead_lookup(lookup_lead_by_phone)
+    set_post_call_handler(handle_post_call)
+    logger.info("ElevenLabs webhook handlers wired to repository")
 
 
 # ---------------------------------------------------------------------------
@@ -598,8 +685,15 @@ if __name__ == "__main__":
         mcp.run(transport="stdio")
     else:
         import uvicorn
+        from fastapi import FastAPI as WebApp
         from mcp.server.transport_security import TransportSecuritySettings
         from shared.auth import apply_auth_middleware
+
+        # Add src/ to path for elevenlabs_webhooks import
+        _src = os.path.join(os.path.dirname(__file__), "..", "src")
+        if _src not in sys.path:
+            sys.path.insert(0, _src)
+        from elevenlabs_webhooks import router as elevenlabs_router
 
         mcp.settings.host = args.host
         mcp.settings.port = args.port
@@ -608,6 +702,19 @@ if __name__ == "__main__":
             enable_dns_rebinding_protection=False,
         )
 
-        app = mcp.streamable_http_app()
-        app = apply_auth_middleware(app)
-        uvicorn.run(app, host=args.host, port=args.port)
+        # Create combined ASGI app:
+        #   - /webhooks/elevenlabs/* → FastAPI (signature-verified, no Bearer auth)
+        #   - /health                → FastAPI (no auth)
+        #   - /mcp                   → MCP streamable-HTTP (Bearer auth)
+        outer = WebApp(title="Opulent Horizons Lead Ingest")
+        outer.include_router(elevenlabs_router)
+
+        @outer.get("/health")
+        async def health():
+            return {"status": "ok"}
+
+        mcp_asgi = mcp.streamable_http_app()
+        mcp_asgi = apply_auth_middleware(mcp_asgi)
+        outer.mount("/", mcp_asgi)
+
+        uvicorn.run(outer, host=args.host, port=args.port)
