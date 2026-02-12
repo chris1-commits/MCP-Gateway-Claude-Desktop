@@ -49,7 +49,7 @@
 - **Pydantic domain models** (Person, LeadDetails, Consent, etc.)
 - **Repository abstraction** (Postgres + in-memory)
 - **OHID resolution logic**
-- **Signature verification** (CloudTalk, Notion)
+- **Signature verification** (Twilio, Notion)
 - **Event publishing** (webhook to n8n/Temporal)
 - **Business logic** (lead ingestion, call processing, sync)
 

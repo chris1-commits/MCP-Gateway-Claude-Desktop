@@ -18,10 +18,10 @@ migration cost was low and avoids accumulating technical debt.
 ### Added
 - `servers/lead_ingest.py` — Lead ingestion MCP server (replaces `Lead.ingest` JSON-RPC method)
   - `ingest_lead` tool — Full lead pipeline with OHID resolution
-  - `process_cloudtalk_event` tool — CloudTalk telephony event processing
+  - `process_twilio_event` tool — Twilio telephony event processing
   - `process_notion_event` tool — Notion webhook handling with challenge verification
   - `lookup_ohid` tool — OHID lookup by email/phone
-  - `verify_webhook_signature` tool — CloudTalk/Notion signature verification
+  - `verify_webhook_signature` tool — Twilio/Notion signature verification
   - `status://pipeline` resource — Pipeline configuration and health
 - `servers/zoho_crm_sync.py` — Zoho CRM bidirectional sync MCP server
   - `sync_lead` tool — Inbound/outbound/bidirectional lead sync

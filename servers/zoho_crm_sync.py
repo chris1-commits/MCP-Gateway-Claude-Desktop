@@ -161,7 +161,7 @@ async def sync_lead(
       - "outbound": Read from Property DB → push to Zoho CRM
       - "bidirectional": Sync both (Zoho is source of truth for conflicts)
 
-    source: Lead source attribution (e.g. 'leadchain_meta_ads', 'cloudtalk_call')
+    source: Lead source attribution (e.g. 'leadchain_meta_ads', 'twilio_call')
     """
     start = time.monotonic()
     app: ZohoContext = ctx.request_context.lifespan_context
@@ -282,7 +282,7 @@ async def upsert_zoho_lead(
     Uses email as the duplicate-check field. If a lead with the same
     email exists, it will be updated; otherwise a new lead is created.
 
-    source_attribution: e.g. 'leadchain_meta_ads', 'cloudtalk_call', 'web_form'
+    source_attribution: e.g. 'leadchain_meta_ads', 'twilio_call', 'web_form'
     """
     app: ZohoContext = ctx.request_context.lifespan_context
 

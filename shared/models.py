@@ -37,7 +37,7 @@ class Consent(BaseModel):
 
 class LeadIngestRequest(BaseModel):
     source_system: str = Field(
-        ..., pattern=r"^(META|WEB|CLOUDTALK|ZOHO_SOCIAL|ZOHO_CRM)$"
+        ..., pattern=r"^(META|WEB|TWILIO|ZOHO_SOCIAL|ZOHO_CRM)$"
     )
     source_lead_id: str
     channel: str = Field(
@@ -51,13 +51,16 @@ class LeadIngestRequest(BaseModel):
     meta: Dict[str, Any] = Field(default_factory=dict)
 
 
-class CloudtalkWebhookPayload(BaseModel):
-    event_type: str
-    call_id: str
-    direction: str
-    from_number: str = Field(alias="from")
-    to: str
-    recording_url: Optional[str] = None
+class TwilioWebhookPayload(BaseModel):
+    """Twilio webhook payload for voice call events."""
+    call_sid: str = Field(..., description="Twilio Call SID")
+    call_status: str = Field(..., description="Call status (ringing, in-progress, completed, etc.)")
+    direction: str = Field(..., description="inbound or outbound-dial")
+    from_number: str = Field(alias="From", description="Caller phone number")
+    to: str = Field(alias="To", description="Called phone number")
+    recording_url: Optional[str] = Field(None, alias="RecordingUrl")
+    recording_sid: Optional[str] = Field(None, alias="RecordingSid")
+    call_duration: Optional[str] = Field(None, alias="CallDuration")
     raw: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
@@ -73,7 +76,7 @@ class ZohoCRMSyncRequest(BaseModel):
         ..., description="inbound (Zoho→PropertyDB), outbound (PropertyDB→Zoho), or bidirectional"
     )
     source: Optional[str] = Field(
-        None, description="Lead source attribution (e.g. 'leadchain_meta_ads', 'cloudtalk_call')"
+        None, description="Lead source attribution (e.g. 'leadchain_meta_ads', 'twilio_call')"
     )
     property_db_lead_id: Optional[str] = Field(
         None, description="Property DB lead ID (required for outbound sync)"

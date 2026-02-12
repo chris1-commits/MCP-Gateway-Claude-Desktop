@@ -1,6 +1,6 @@
 from .models import (
     Person, LeadDetails, Consent, LeadIngestRequest,
-    CloudtalkWebhookPayload, ZohoCRMSyncRequest, ZohoCRMSyncResponse,
+    TwilioWebhookPayload, ZohoCRMSyncRequest, ZohoCRMSyncResponse,
 )
 from .repository import (
     Repository, PostgresRepository, InMemoryRepository, resolve_ohid,

@@ -34,7 +34,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP, Context
 
 from shared.models import (
-    Person, LeadDetails, Consent, LeadIngestRequest, CloudtalkWebhookPayload,
+    Person, LeadDetails, Consent, LeadIngestRequest, TwilioWebhookPayload,
 )
 from shared.repository import (
     Repository, PostgresRepository, InMemoryRepository, resolve_ohid,
@@ -83,7 +83,7 @@ mcp = FastMCP(
     name="Opulent Horizons Lead Ingest",
     instructions=(
         "Lead ingestion and OHID resolution server for Opulent Horizons property business. "
-        "Accepts leads from META, WEB, CLOUDTALK, ZOHO_SOCIAL, and ZOHO_CRM sources. "
+        "Accepts leads from META, WEB, TWILIO, ZOHO_SOCIAL, and ZOHO_CRM sources. "
         "Resolves or creates Opulent Horizons IDs (OHIDs) and persists to Property DB."
     ),
     lifespan=app_lifespan,
@@ -130,7 +130,7 @@ async def ingest_lead(
     """
     Ingest a new lead into the Opulent Horizons pipeline.
 
-    Accepts leads from any configured source system (META, WEB, CLOUDTALK,
+    Accepts leads from any configured source system (META, WEB, TWILIO,
     ZOHO_SOCIAL, ZOHO_CRM). Resolves or creates an OHID, persists to
     Property DB, and publishes a LeadIngested workflow event.
 
@@ -195,31 +195,35 @@ async def ingest_lead(
 
 
 # ---------------------------------------------------------------------------
-# Tools — CloudTalk Webhook Processing
+# Tools — Twilio Webhook Processing
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def process_cloudtalk_event(
-    event_type: str,
-    call_id: str,
+async def process_twilio_event(
+    call_sid: str,
+    call_status: str,
     direction: str,
     from_number: str,
     to_number: str,
     recording_url: Optional[str] = None,
+    call_duration: Optional[str] = None,
     raw: Optional[dict] = None,
     ctx: Context = None,
 ) -> dict:
     """
-    Process a CloudTalk telephony event (call started, completed, etc.).
+    Process a Twilio telephony event (call initiated, ringing, completed, etc.).
 
     Persists the event as a workflow event and publishes for downstream
     processing (call transcription, AI summary, lead matching).
+
+    call_status values: queued, ringing, in-progress, completed, busy,
+    no-answer, canceled, failed.
     """
     app: AppContext = ctx.request_context.lifespan_context
     event_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    if event_type in ("call.started", "call.ringing"):
+    if call_status in ("ringing", "queued", "initiated"):
         internal_event_type = "CallReceived"
     else:
         internal_event_type = "CallCompleted"
@@ -229,11 +233,13 @@ async def process_cloudtalk_event(
         "event_id": event_id,
         "occurred_at": now,
         "call": {
-            "call_id": call_id,
+            "call_sid": call_sid,
             "direction": direction.upper(),
             "from": from_number,
             "to": to_number,
             "recording_url": recording_url,
+            "call_duration": call_duration,
+            "call_status": call_status,
         },
         "ohid": None,
     }
@@ -243,11 +249,11 @@ async def process_cloudtalk_event(
         ohid=None,
         event_type=internal_event_type,
         payload=event,
-        source_system="CLOUDTALK",
+        source_system="TWILIO",
     )
 
     await _publish_event(app, internal_event_type, event)
-    await ctx.info(f"CloudTalk event processed: {internal_event_type} call_id={call_id}")
+    await ctx.info(f"Twilio event processed: {internal_event_type} call_sid={call_sid}")
 
     return {"event_id": event_id, "event_type": internal_event_type, "accepted": True}
 
@@ -326,16 +332,19 @@ async def lookup_ohid(
 def verify_webhook_signature(
     body_hex: str,
     signature: str,
-    source: str = "cloudtalk",
+    source: str = "twilio",
 ) -> dict:
     """
-    Verify a webhook signature for CloudTalk or Notion payloads.
+    Verify a webhook signature for Twilio or Notion payloads.
     Body should be provided as hex-encoded string.
+
+    Twilio uses HMAC-SHA256 with the auth token.
+    Notion uses HMAC-SHA256 with the webhook secret.
     """
     body = bytes.fromhex(body_hex)
 
-    if source == "cloudtalk":
-        secret = os.getenv("CLOUDTALK_WEBHOOK_SECRET", "")
+    if source == "twilio":
+        secret = os.getenv("TWILIO_AUTH_TOKEN", "")
         mac = hmac.new(secret.encode(), msg=body, digestmod=hashlib.sha256)
         valid = hmac.compare_digest(mac.hexdigest(), signature)
     elif source == "notion":
@@ -359,7 +368,7 @@ def pipeline_status() -> str:
     return json.dumps({
         "server": "Opulent Horizons Lead Ingest",
         "version": "1.0.0",
-        "sources": ["META", "WEB", "CLOUDTALK", "ZOHO_SOCIAL", "ZOHO_CRM"],
+        "sources": ["META", "WEB", "TWILIO", "ZOHO_SOCIAL", "ZOHO_CRM"],
         "channels": ["WEB_FORM", "META_LEAD_AD", "INBOUND_CALL", "OUTBOUND_CALL", "SOCIAL", "CRM"],
         "database": "connected" if os.getenv("PGHOST") else "in-memory",
         "workflow_webhook": bool(

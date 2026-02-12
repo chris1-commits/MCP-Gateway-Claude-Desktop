@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS lead_context (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Workflow events: CloudTalk calls, Notion events, lead-ingested events
+-- Workflow events: Twilio calls, Notion events, lead-ingested events
 CREATE TABLE IF NOT EXISTS workflow_event (
     id              UUID PRIMARY KEY,
     ohid            UUID,

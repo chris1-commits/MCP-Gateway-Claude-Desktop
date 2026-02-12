@@ -24,7 +24,7 @@
         "PGPASSWORD": "",
         "PGDATABASE": "property_db",
         "WORKFLOW_WEBHOOK_URL": "",
-        "CLOUDTALK_WEBHOOK_SECRET": "",
+        "TWILIO_AUTH_TOKEN": "",
         "NOTION_WEBHOOK_SECRET": ""
       }
     },

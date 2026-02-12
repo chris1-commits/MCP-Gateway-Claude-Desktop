@@ -197,7 +197,7 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'PGDATABASE', value: pgDatabaseName }
             { name: 'PGSSLMODE', value: 'require' }
             { name: 'WORKFLOW_WEBHOOK_URL', value: '' }
-            { name: 'CLOUDTALK_WEBHOOK_SECRET', value: '' }
+            { name: 'TWILIO_AUTH_TOKEN', value: '' }
             { name: 'NOTION_WEBHOOK_SECRET', value: '' }
           ]
         }

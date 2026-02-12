@@ -37,7 +37,7 @@ def test_expected_tools():
     names = {t.name for t in mcp._tool_manager._tools.values()}
     expected = {
         "ingest_lead",
-        "process_cloudtalk_event",
+        "process_twilio_event",
         "process_notion_event",
         "lookup_ohid",
         "verify_webhook_signature",
@@ -50,9 +50,9 @@ def test_expected_tools():
 # ---------------------------------------------------------------------------
 
 class TestVerifyWebhookSignature:
-    def test_valid_cloudtalk_signature(self):
+    def test_valid_twilio_signature(self):
         secret = "test-secret-123"
-        os.environ["CLOUDTALK_WEBHOOK_SECRET"] = secret
+        os.environ["TWILIO_AUTH_TOKEN"] = secret
         body = b'{"event":"call.completed"}'
         expected_sig = hmac_mod.new(
             secret.encode(), msg=body, digestmod=hashlib.sha256
@@ -62,22 +62,22 @@ class TestVerifyWebhookSignature:
         result = verify_webhook_signature(
             body_hex=body.hex(),
             signature=expected_sig,
-            source="cloudtalk",
+            source="twilio",
         )
         assert result["valid"] is True
-        assert result["source"] == "cloudtalk"
-        os.environ["CLOUDTALK_WEBHOOK_SECRET"] = ""
+        assert result["source"] == "twilio"
+        os.environ["TWILIO_AUTH_TOKEN"] = ""
 
     def test_invalid_signature(self):
-        os.environ["CLOUDTALK_WEBHOOK_SECRET"] = "real-secret"
+        os.environ["TWILIO_AUTH_TOKEN"] = "real-secret"
         from servers.lead_ingest import verify_webhook_signature
         result = verify_webhook_signature(
             body_hex=b"test body".hex(),
             signature="0" * 64,
-            source="cloudtalk",
+            source="twilio",
         )
         assert result["valid"] is False
-        os.environ["CLOUDTALK_WEBHOOK_SECRET"] = ""
+        os.environ["TWILIO_AUTH_TOKEN"] = ""
 
     def test_valid_notion_signature(self):
         secret = "notion-secret-456"
@@ -108,13 +108,13 @@ class TestVerifyWebhookSignature:
         assert "error" in result
 
     def test_empty_secret_rejects(self):
-        os.environ["CLOUDTALK_WEBHOOK_SECRET"] = ""
+        os.environ["TWILIO_AUTH_TOKEN"] = ""
         body = b'{"test":"true"}'
         from servers.lead_ingest import verify_webhook_signature
         result = verify_webhook_signature(
             body_hex=body.hex(),
             signature="anything",
-            source="cloudtalk",
+            source="twilio",
         )
         assert result["valid"] is False
 
@@ -156,7 +156,7 @@ def _mcp_stdio_call(server_module: str, tool_name: str, arguments: dict) -> dict
         "PGHOST": "",
         "PGDATABASE": "",
         "WORKFLOW_WEBHOOK_URL": "",
-        "CLOUDTALK_WEBHOOK_SECRET": "",
+        "TWILIO_AUTH_TOKEN": "",
         "NOTION_WEBHOOK_SECRET": "",
     }
 
@@ -229,24 +229,25 @@ class TestIngestLeadIntegration:
         assert "ohid" in result
         assert "ingest_id" in result
 
-    def test_cloudtalk_call_completed(self):
-        result = _mcp_stdio_call("servers.lead_ingest", "process_cloudtalk_event", {
-            "event_type": "call.completed",
-            "call_id": "test-call-001",
+    def test_twilio_call_completed(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_twilio_event", {
+            "call_sid": "CA1234567890abcdef1234567890abcdef",
+            "call_status": "completed",
             "direction": "inbound",
-            "from_number": "+442012345678",
-            "to_number": "+441234567890",
+            "from_number": "+61412345678",
+            "to_number": "+61498765432",
+            "call_duration": "120",
         })
         assert result["accepted"] is True
         assert result["event_type"] == "CallCompleted"
 
-    def test_cloudtalk_call_started(self):
-        result = _mcp_stdio_call("servers.lead_ingest", "process_cloudtalk_event", {
-            "event_type": "call.started",
-            "call_id": "test-call-002",
-            "direction": "outbound",
-            "from_number": "+441234567890",
-            "to_number": "+442012345678",
+    def test_twilio_call_ringing(self):
+        result = _mcp_stdio_call("servers.lead_ingest", "process_twilio_event", {
+            "call_sid": "CA0987654321abcdef0987654321abcdef",
+            "call_status": "ringing",
+            "direction": "outbound-dial",
+            "from_number": "+61498765432",
+            "to_number": "+61412345678",
         })
         assert result["accepted"] is True
         assert result["event_type"] == "CallReceived"

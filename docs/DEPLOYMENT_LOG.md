@@ -23,7 +23,7 @@ These were present in the initial write but already corrected on the Windows mac
 
 ### Smoke Test Results ✅
 ```
-Lead Ingest: 5 tools [ingest_lead, process_cloudtalk_event, process_notion_event, lookup_ohid, verify_webhook_signature]
+Lead Ingest: 5 tools [ingest_lead, process_twilio_event, process_notion_event, lookup_ohid, verify_webhook_signature]
 Zoho Sync:   3 tools [sync_lead, get_zoho_lead, upsert_zoho_lead]
 ```
 
