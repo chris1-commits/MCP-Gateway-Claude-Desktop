@@ -426,14 +426,14 @@ if __name__ == "__main__":
             enable_dns_rebinding_protection=False,
         )
 
-        # --- Create FastAPI gateway wrapping MCP + webhook endpoints ---
-        gateway = FastAPI(title="Opulent Horizons MCP Gateway")
+        # --- Create FastAPI app for webhook endpoints ---
+        webhook_app = FastAPI(title="Opulent Horizons MCP Gateway")
 
-        @gateway.get("/health")
+        @webhook_app.get("/health")
         async def health():
             return {"status": "ok"}
 
-        gateway.include_router(elevenlabs_router)
+        webhook_app.include_router(elevenlabs_router)
 
         # --- Wire lead lookup (phone → lead dict) using repository ---
         _el_logger = logging.getLogger("mcp_gateway.elevenlabs")
@@ -502,9 +502,26 @@ if __name__ == "__main__":
 
         set_post_call_handler(_handle_post_call)
 
-        # Mount MCP protocol handler (catch-all for /mcp path)
+        # MCP protocol handler (manages its own lifespan / task group)
         mcp_http = mcp.streamable_http_app()
-        gateway.mount("/", mcp_http)
 
-        app = apply_auth_middleware(gateway)
+        # Path-routing ASGI app: MCP app gets lifespan events (initialises
+        # session manager task group); webhook/health requests go to FastAPI.
+        class _GatewayRouter:
+            def __init__(self, mcp_app, webhook_app):
+                self._mcp = mcp_app
+                self._webhooks = webhook_app
+
+            async def __call__(self, scope, receive, send):
+                if scope["type"] == "lifespan":
+                    await self._mcp(scope, receive, send)
+                    return
+                path = scope.get("path", "")
+                if path.startswith("/webhooks") or path == "/health":
+                    await self._webhooks(scope, receive, send)
+                else:
+                    await self._mcp(scope, receive, send)
+
+        combined = _GatewayRouter(mcp_http, webhook_app)
+        app = apply_auth_middleware(combined)
         uvicorn.run(app, host=args.host, port=args.port)
