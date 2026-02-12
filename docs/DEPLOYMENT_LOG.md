@@ -32,3 +32,39 @@ The actual Claude Desktop config (`AppData\Roaming\Claude\claude_desktop_config.
 
 ### Claude Code / VS Code
 No conflict. Claude Code has no `.mcp.json` registered — the MCP servers are not connected to it. This is independent of Claude Desktop config.
+
+---
+
+## 2026-02-12: Azure Remote Endpoints & Desktop Config (Phase 2)
+
+### What Was Done
+
+1. **Claude Desktop config updated** (`AppData\Roaming\Claude\claude_desktop_config.json`)
+   - Added remote Azure endpoints with Streamable HTTP transport + Bearer auth
+   - Both `opulent-lead-ingest` and `opulent-zoho-sync` configured as primary (remote)
+
+2. **Project-level config template updated** (`claude_desktop_config.json`)
+   - Remote servers (`opulent-lead-ingest`, `opulent-zoho-sync`) — Azure Container Apps URLs with `<MCP_API_KEY>` placeholder
+   - Local servers (`opulent-lead-ingest-local`, `opulent-zoho-sync-local`) — stdio transport, `disabled: true`, with `<VENV_PATH>` / `<PROJECT_PATH>` placeholders
+
+3. **Azure endpoints verified live**
+   - Lead Ingest: `https://opulent-mcp-dev-lead-ingest.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp` → HTTP 200
+   - Zoho Sync: `https://opulent-mcp-dev-zoho-sync.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp` → HTTP 200
+
+### Azure Container Apps Deployment
+
+| Server | URL | Transport | Auth |
+|--------|-----|-----------|------|
+| Lead Ingest | `https://opulent-mcp-dev-lead-ingest.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp` | Streamable HTTP | Bearer token |
+| Zoho Sync | `https://opulent-mcp-dev-zoho-sync.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp` | Streamable HTTP | Bearer token |
+
+### Tools Available (8 total)
+
+**Lead Ingest (5 tools):** `ingest_lead`, `process_cloudtalk_event`, `process_notion_event`, `lookup_ohid`, `verify_webhook_signature`
+
+**Zoho CRM Sync (3 tools):** `sync_lead`, `get_zoho_lead`, `upsert_zoho_lead`
+
+### Activation Steps
+1. Quit Claude Desktop fully (right-click tray icon → Quit)
+2. Reopen Claude Desktop
+3. Verify all 8 tools are discoverable in the MCP server list

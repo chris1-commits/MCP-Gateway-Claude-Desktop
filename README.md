@@ -102,9 +102,9 @@ To add a new MCP server (e.g., BigQuery Analytics):
 
 ```python
 # servers/bigquery_analytics.py
-from mcp.server.mcpserver import MCPServer, Context
+from mcp.server.fastmcp import FastMCP, Context
 
-mcp = MCPServer("Opulent Horizons BigQuery Analytics", version="1.0.0")
+mcp = FastMCP("Opulent Horizons BigQuery Analytics")
 
 @mcp.tool()
 async def query_lead_analytics(
@@ -128,17 +128,29 @@ That's it. No JSON-RPC boilerplate, no route registration, no transport handling
 opulent-mcp-gateway/
 ├── pyproject.toml              # Dependencies (mcp SDK, asyncpg, httpx)
 ├── Dockerfile                  # Production container
+├── docker-compose.yml          # Local dev: both servers + Postgres
 ├── .env.example                # Environment template
 ├── claude_desktop_config.json  # Claude Desktop MCP registration
 ├── docs/
 │   ├── CHANGELOG.md            # Version history and changes
 │   └── DEPLOYMENT_LOG.md       # Deployment records
+├── infra/
+│   └── main.bicep              # Azure Container Apps IaC
 ├── shared/
 │   ├── __init__.py
+│   ├── auth.py                 # Bearer token ASGI middleware
+│   ├── middleware.py            # Correlation ID + structured logging
 │   ├── models.py               # Pydantic domain models
-│   └── repository.py           # DB abstraction (Postgres + in-memory)
-└── servers/
-    ├── __init__.py
-    ├── lead_ingest.py           # Lead ingestion MCP server
-    └── zoho_crm_sync.py         # Zoho CRM sync MCP server
+│   ├── repository.py           # DB abstraction (Postgres + in-memory)
+│   ├── schema.sql              # PostgreSQL table definitions
+│   └── zoho_auth.py            # OAuth2 token manager for Zoho API
+├── servers/
+│   ├── __init__.py
+│   ├── lead_ingest.py           # Lead ingestion MCP server
+│   └── zoho_crm_sync.py        # Zoho CRM sync MCP server
+└── tests/
+    ├── conftest.py              # Pytest fixtures
+    ├── test_lead_ingest.py      # Lead ingest unit + integration tests
+    ├── test_zoho_sync.py        # Zoho sync tests
+    └── e2e_zoho_live.py         # End-to-end Zoho API tests
 ```
