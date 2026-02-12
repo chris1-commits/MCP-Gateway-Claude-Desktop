@@ -55,6 +55,13 @@ param pgAdminUser string = 'opulent'
 @description('PostgreSQL database name')
 param pgDatabaseName string = 'opulent_mcp'
 
+@secure()
+@description('Twilio Auth Token for webhook signature verification')
+param twilioAuthToken string = ''
+
+@description('Twilio Account SID')
+param twilioAccountSid string = ''
+
 // ---------------------------------------------------------------------------
 // Variables
 // ---------------------------------------------------------------------------
@@ -175,6 +182,10 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'pg-password'
           value: pgAdminPassword
         }
+        {
+          name: 'twilio-auth-token'
+          value: twilioAuthToken
+        }
       ]
     }
     template: {
@@ -197,7 +208,8 @@ resource leadIngest 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'PGDATABASE', value: pgDatabaseName }
             { name: 'PGSSLMODE', value: 'require' }
             { name: 'WORKFLOW_WEBHOOK_URL', value: '' }
-            { name: 'TWILIO_AUTH_TOKEN', value: '' }
+            { name: 'TWILIO_AUTH_TOKEN', secretRef: 'twilio-auth-token' }
+            { name: 'TWILIO_ACCOUNT_SID', value: twilioAccountSid }
             { name: 'NOTION_WEBHOOK_SECRET', value: '' }
           ]
         }

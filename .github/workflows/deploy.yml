@@ -74,7 +74,9 @@ jobs:
               zohoApiBase="https://www.zohoapis.com.au/crm/v2" \
               zohoTokenUrl="https://accounts.zoho.com.au/oauth/v2/token" \
               mcpApiKey="${{ secrets.MCP_API_KEY }}" \
-              pgAdminPassword="${{ secrets.PG_ADMIN_PASSWORD }}"
+              pgAdminPassword="${{ secrets.PG_ADMIN_PASSWORD }}" \
+              twilioAuthToken="${{ secrets.TWILIO_AUTH_TOKEN }}" \
+              twilioAccountSid="${{ secrets.TWILIO_ACCOUNT_SID }}"
 
       - name: Get deployment outputs
         id: outputs
