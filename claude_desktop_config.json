@@ -1,9 +1,22 @@
 {
   "mcpServers": {
     "opulent-lead-ingest": {
-      "command": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway\\.venv\\Scripts\\python.exe",
+      "url": "https://opulent-mcp-dev-lead-ingest.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_API_KEY>"
+      }
+    },
+    "opulent-zoho-sync": {
+      "url": "https://opulent-mcp-dev-zoho-sync.agreeablemeadow-00328895.australiaeast.azurecontainerapps.io/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_API_KEY>"
+      }
+    },
+    "opulent-lead-ingest-local": {
+      "disabled": true,
+      "command": "<VENV_PATH>\\Scripts\\python.exe",
       "args": ["-m", "servers.lead_ingest"],
-      "cwd": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway",
+      "cwd": "<PROJECT_PATH>",
       "env": {
         "PGHOST": "",
         "PGPORT": "5432",
@@ -15,10 +28,11 @@
         "NOTION_WEBHOOK_SECRET": ""
       }
     },
-    "opulent-zoho-sync": {
-      "command": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway\\.venv\\Scripts\\python.exe",
+    "opulent-zoho-sync-local": {
+      "disabled": true,
+      "command": "<VENV_PATH>\\Scripts\\python.exe",
       "args": ["-m", "servers.zoho_crm_sync"],
-      "cwd": "C:\\Users\\ChrisSpratt\\Projects\\opulent-mcp-gateway",
+      "cwd": "<PROJECT_PATH>",
       "env": {
         "ZOHO_API_BASE": "https://www.zohoapis.com.au/crm/v2",
         "ZOHO_TOKEN_URL": "https://accounts.zoho.com.au/oauth/v2/token",
